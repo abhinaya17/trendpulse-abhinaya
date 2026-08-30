@@ -42,7 +42,11 @@ def get_story_ids():
     url = f"{BASE_URL}/topstories.json"
 
     try:
-        response = requests.get(url, headers=HEADERS, timeout=10)
+        response = requests.get(
+            url,
+            headers=HEADERS,
+            timeout=10
+        )
         response.raise_for_status()
 
         story_ids = response.json()
@@ -60,7 +64,11 @@ def get_story(story_id):
     url = f"{BASE_URL}/item/{story_id}.json"
 
     try:
-        response = requests.get(url, headers=HEADERS, timeout=10)
+        response = requests.get(
+            url,
+            headers=HEADERS,
+            timeout=10
+        )
         response.raise_for_status()
 
         story = response.json()
@@ -103,7 +111,7 @@ def create_story_record(story, category):
 
 
 def collect_stories():
-    """Fetch stories once and collect up to 25 per category."""
+    """Fetch the top 500 stories and collect up to 25 per category."""
 
     story_ids = get_story_ids()
 
@@ -111,43 +119,43 @@ def collect_stories():
         print("No story IDs found.")
         return []
 
-    collected_stories = []
-
-    category_counts = {
-        category: 0 for category in CATEGORIES
-    }
+    # Fetch each story only once and keep the results.
+    stories = []
 
     for story_id in story_ids:
-
-        # Stop when all categories have 25 stories
-        if all(count >= 25 for count in category_counts.values()):
-            break
-
         story = get_story(story_id)
 
-        if not story:
-            continue
+        if story:
+            stories.append(story)
 
-        title = story.get("title", "")
+    collected_stories = []
 
-        category = find_category(title)
+    # Process each category separately.
+    # This makes the required category loop and delay clear.
+    for category in CATEGORIES:
 
-        if category is None:
-            continue
+        category_count = 0
 
-        # Do not collect more than 25 for one category
-        if category_counts[category] >= 25:
-            continue
+        for story in stories:
 
-        record = create_story_record(story, category)
+            # Stop after collecting 25 stories for this category.
+            if category_count >= 25:
+                break
 
-        collected_stories.append(record)
-        category_counts[category] += 1
+            title = story.get("title", "")
 
-    for category, count in category_counts.items():
-        print(f"{category}: collected {count} stories")
+            # Check whether this story belongs to this category.
+            if find_category(title) != category:
+                continue
 
-        # Required 2-second delay per category
+            record = create_story_record(story, category)
+
+            collected_stories.append(record)
+            category_count += 1
+
+        print(f"{category}: collected {category_count} stories")
+
+        # Wait 2 seconds between category loops.
         time.sleep(2)
 
     return collected_stories
@@ -159,10 +167,16 @@ def save_to_json(stories):
     os.makedirs("data", exist_ok=True)
 
     date_string = datetime.now().strftime("%Y%m%d")
+
     filename = f"data/trends_{date_string}.json"
 
     with open(filename, "w", encoding="utf-8") as file:
-        json.dump(stories, file, indent=4, ensure_ascii=False)
+        json.dump(
+            stories,
+            file,
+            indent=4,
+            ensure_ascii=False
+        )
 
     print()
     print(f"Collected {len(stories)} stories.")
